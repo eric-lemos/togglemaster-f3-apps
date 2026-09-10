@@ -19,7 +19,7 @@ permissions:
 env:
   GO_VERSION: "1.26.0"
   AWS_REGION: ${{ vars.AWS_REGION }}
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  ECR_REPOSITORY: togglemaster/auth
   IMAGE_NAME: auth-service
 
 jobs:

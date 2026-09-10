@@ -18,7 +18,7 @@ permissions:
 env:
     PYTHON_VERSION: "3.11"
     AWS_REGION: ${{ vars.AWS_REGION }}
-    ECR_REPOSITORY: ${{ vars.ECR_TARGETING_REPOSITORY }}
+    ECR_REPOSITORY: togglemaster/targeting
     IMAGE_NAME: targeting-service
 
 jobs:

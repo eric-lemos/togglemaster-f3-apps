@@ -18,7 +18,7 @@ permissions:
 env:
     PYTHON_VERSION: "3.11"
     AWS_REGION: ${{ vars.AWS_REGION }}
-    ECR_REPOSITORY: ${{ vars.ECR_FLAG_REPOSITORY }}
+    ECR_REPOSITORY: togglemaster/flag
     IMAGE_NAME: flag-service
 
 jobs:

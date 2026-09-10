@@ -19,7 +19,7 @@ permissions:
 env:
     GO_VERSION: "1.26.0"
     AWS_REGION: ${{ vars.AWS_REGION }}
-    ECR_REPOSITORY: ${{ vars.ECR_EVALUATION_REPOSITORY }}
+    ECR_REPOSITORY: togglemaster/evaluation
     IMAGE_NAME: evaluation-service
 
 jobs:
