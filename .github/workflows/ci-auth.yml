@@ -11,6 +11,7 @@ on:
     paths:
       - "apps/auth-service/**"
       - ".github/workflows/ci-auth.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read

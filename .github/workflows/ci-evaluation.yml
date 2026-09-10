@@ -11,6 +11,7 @@ on:
         paths:
             - "apps/evaluation-service/**"
             - ".github/workflows/ci-evaluation.yml"
+    workflow_dispatch:
 
 permissions:
     contents: read

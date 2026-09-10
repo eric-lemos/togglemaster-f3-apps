@@ -10,6 +10,7 @@ on:
         paths:
             - "apps/analytics-service/**"
             - ".github/workflows/ci-analytics.yml"
+    workflow_dispatch:
 
 permissions:
     contents: read

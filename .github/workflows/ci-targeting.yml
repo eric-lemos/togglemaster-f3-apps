@@ -10,6 +10,7 @@ on:
         paths:
             - "apps/targeting-service/**"
             - ".github/workflows/ci-targeting.yml"
+    workflow_dispatch:
 
 permissions:
     contents: read

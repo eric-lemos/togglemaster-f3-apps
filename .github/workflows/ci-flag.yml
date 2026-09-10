@@ -10,6 +10,7 @@ on:
         paths:
             - "apps/flag-service/**"
             - ".github/workflows/ci-flag.yml"
+    workflow_dispatch:
 
 permissions:
     contents: read
