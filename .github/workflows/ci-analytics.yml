@@ -155,7 +155,7 @@ jobs:
                   manifest_path, image = sys.argv[1:]
                   path = Path(manifest_path)
                   content = path.read_text()
-                  updated, replacements = re.subn(r"(?m)^(\s*image:\s*).+$", rf"\1{image}", content, count=1)
+                  updated, replacements = re.subn(r"(?m)^(\s*image:\s*).+$", rf"\g<1>{image}", content, count=1)
                   if replacements != 1:
                     raise SystemExit(f"Campo image não encontrado: {manifest_path}")
                   path.write_text(updated)

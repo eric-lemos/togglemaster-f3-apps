@@ -194,7 +194,7 @@ jobs:
           content = path.read_text()
           updated, replacements = re.subn(
               r"(?m)^(\s*image:\s*).+$",
-              rf"\1{image}",
+              rf"\g<1>{image}",
               content,
               count=1,
           )
