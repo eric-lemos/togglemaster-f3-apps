@@ -132,7 +132,7 @@ jobs:
           format: table
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -142,25 +142,63 @@ jobs:
       - name: Log in to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
 
       - name: Tag image with commit version
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
           docker tag "${{ env.IMAGE_NAME }}:${{ github.sha }}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
 
       - name: Push image to Amazon ECR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
           docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
 
+      - name: Checkout GitOps repository
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.GITOPS_REPOSITORY }}
+          ref: ${{ env.GITOPS_BRANCH }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
+
       - name: Update GitOps manifest
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        working-directory: gitops
         env:
-          GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
-          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-        run: bash scripts/update-gitops-image.sh "${{ env.GITOPS_REPOSITORY }}" "${{ env.GITOPS_BRANCH }}" "${{ env.GITOPS_MANIFEST_PATH }}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
+          IMAGE: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          MANIFEST_PATH: ${{ env.GITOPS_MANIFEST_PATH }}
+        run: |
+          python3 - "$MANIFEST_PATH" "$IMAGE" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          manifest_path, image = sys.argv[1:]
+          path = Path(manifest_path)
+          content = path.read_text()
+          updated, replacements = re.subn(
+              r"(?m)^(\s*image:\s*).+$",
+              rf"\1{image}",
+              content,
+              count=1,
+          )
+          if replacements != 1:
+              raise SystemExit(f"Campo image não encontrado: {manifest_path}")
+          path.write_text(updated)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$MANIFEST_PATH"
+          if git diff --cached --quiet; then
+            echo "Manifesto já está atualizado."
+            exit 0
+          fi
+          git commit -m "chore: update ${MANIFEST_PATH} image"
+          git push
