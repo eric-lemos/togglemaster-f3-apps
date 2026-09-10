@@ -1,13 +1,14 @@
+import logging
 import os
 import sys
+from functools import wraps
+
 import psycopg2
 import requests
+from dotenv import load_dotenv
+from flask import Flask, jsonify, request
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import SimpleConnectionPool
-from flask import Flask, request, jsonify
-from dotenv import load_dotenv
-from functools import wraps
-import logging
 
 # Configura o logging
 logging.basicConfig(level=logging.INFO)
@@ -100,7 +101,7 @@ def create_flag():
         if conn: conn.rollback()
         log.warning(f"Tentativa de criar flag duplicada: '{name}'")
         return jsonify({"error": f"Flag '{name}' já existe"}), 409
-    except Exception as e:
+    except psycopg2.Error as e:
         if conn: conn.rollback()
         log.error(f"Erro ao criar flag: {e}")
         return jsonify({"error": "Erro interno do servidor", "details": str(e)}), 500
@@ -120,7 +121,7 @@ def get_flags():
         cur.execute("SELECT * FROM flags ORDER BY name")
         flags = cur.fetchall()
         return jsonify(flags)
-    except Exception as e:
+    except psycopg2.Error as e:
         log.error(f"Erro ao buscar flags: {e}")
         return jsonify({"error": "Erro interno do servidor", "details": str(e)}), 500
     finally:
@@ -141,7 +142,7 @@ def get_flag(name):
         if not flag:
             return jsonify({"error": "Flag não encontrada"}), 404
         return jsonify(flag)
-    except Exception as e:
+    except psycopg2.Error as e:
         log.error(f"Erro ao buscar flag '{name}': {e}")
         return jsonify({"error": "Erro interno do servidor", "details": str(e)}), 500
     finally:
@@ -188,7 +189,7 @@ def update_flag(name):
         conn.commit()
         log.info(f"Flag '{name}' atualizada com sucesso.")
         return jsonify(updated_flag), 200
-    except Exception as e:
+    except psycopg2.Error as e:
         if conn: conn.rollback()
         log.error(f"Erro ao atualizar flag '{name}': {e}")
         return jsonify({"error": "Erro interno do servidor", "details": str(e)}), 500
@@ -213,7 +214,7 @@ def delete_flag(name):
         conn.commit()
         log.info(f"Flag '{name}' deletada com sucesso.")
         return "", 204 # 204 No Content
-    except Exception as e:
+    except psycopg2.Error as e:
         if conn: conn.rollback()
         log.error(f"Erro ao deletar flag '{name}': {e}")
         return jsonify({"error": "Erro interno do servidor", "details": str(e)}), 500
@@ -222,5 +223,5 @@ def delete_flag(name):
         if conn: pool.putconn(conn)
 
 if __name__ == '__main__':
-    port = int(os.getenv("PORT", 8002))
+    port = int(os.getenv("PORT", "8002"))
     app.run(host='0.0.0.0', port=port, debug=False)
