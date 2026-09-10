@@ -20,6 +20,9 @@ env:
     AWS_REGION: ${{ vars.AWS_REGION }}
     ECR_REPOSITORY: togglemaster/targeting
     IMAGE_NAME: targeting-service
+    GITOPS_REPOSITORY: ${{ vars.GITOPS_REPOSITORY }}
+    GITOPS_BRANCH: ${{ vars.GITOPS_BRANCH }}
+    GITOPS_MANIFEST_PATH: ${{ vars.GITOPS_TARGETING_MANIFEST_PATH }}
 
 jobs:
     test:
@@ -111,7 +114,40 @@ jobs:
               env:
                   ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
               run: |
-                  docker tag "${{ env.IMAGE_NAME }}:${{ github.sha }}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:v1.0.0-${{ github.sha }}"
                   docker tag "${{ env.IMAGE_NAME }}:${{ github.sha }}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
-                  docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:v1.0.0-${{ github.sha }}"
                   docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
+
+            - name: Checkout GitOps repository
+              if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+              uses: actions/checkout@v5
+              with:
+                  repository: ${{ env.GITOPS_REPOSITORY }}
+                  ref: ${{ env.GITOPS_BRANCH }}
+                  token: ${{ secrets.GITOPS_TOKEN }}
+                  path: gitops
+
+            - name: Update GitOps manifest
+              if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+              working-directory: gitops
+              env:
+                  IMAGE: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+                  MANIFEST_PATH: ${{ env.GITOPS_MANIFEST_PATH }}
+              run: |
+                  python3 - "$MANIFEST_PATH" "$IMAGE" <<'PY'
+                  from pathlib import Path
+                  import re
+                  import sys
+                  manifest_path, image = sys.argv[1:]
+                  path = Path(manifest_path)
+                  content = path.read_text()
+                  updated, replacements = re.subn(r"(?m)^(\s*image:\s*).+$", rf"\1{image}", content, count=1)
+                  if replacements != 1:
+                    raise SystemExit(f"Campo image não encontrado: {manifest_path}")
+                  path.write_text(updated)
+                  PY
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git add "$MANIFEST_PATH"
+                  if git diff --cached --quiet; then exit 0; fi
+                  git commit -m "chore: update ${MANIFEST_PATH} image"
+                  git push
