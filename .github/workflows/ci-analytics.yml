@@ -115,7 +115,22 @@ jobs:
                   ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
               run: |
                   docker tag "${{ env.IMAGE_NAME }}:${{ github.sha }}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
-                  docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
+
+            - name: Check whether image tag already exists
+              id: image-tag
+              if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+              run: |
+                  if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids "imageTag=$GITHUB_SHA" --region "$AWS_REGION" >/dev/null 2>&1; then
+                    echo "exists=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "exists=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Push image to Amazon ECR
+              if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && steps.image-tag.outputs.exists != 'true'
+              env:
+                  ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+              run: docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
 
             - name: Checkout GitOps repository
               if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
