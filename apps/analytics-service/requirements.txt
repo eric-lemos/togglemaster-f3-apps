@@ -3,4 +3,3 @@ Werkzeug==2.2.3
 gunicorn==20.1.0
 python-dotenv==0.21.0
 boto3==1.26.50
-PyYAML==5.3.1
