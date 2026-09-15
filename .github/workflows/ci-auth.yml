@@ -211,4 +211,18 @@ jobs:
             exit 0
           fi
           git commit -m "chore: update ${MANIFEST_PATH} image"
-          git push
+
+          pushed=false
+          for i in {1..5}; do
+            if git push origin "${GITOPS_BRANCH:-main}"; then
+              pushed=true
+              break
+            fi
+            echo "Concorrencia detectada no push, tentando pull --rebase (tentativa $i/5)..."
+            sleep $((i * 2))
+            git pull --rebase origin "${GITOPS_BRANCH:-main}"
+          done
+          if [[ "$pushed" != "true" ]]; then
+            echo "Falha ao enviar alteracoes para o GitOps apos 5 tentativas." >&2
+            exit 1
+          fi

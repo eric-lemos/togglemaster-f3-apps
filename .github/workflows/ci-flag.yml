@@ -1,168 +1,182 @@
 name: CI Flag Service
 
 on:
-    pull_request:
-        paths:
-            - "apps/flag-service/**"
-            - ".github/workflows/ci-flag.yml"
-    push:
-        branches: [main]
-        paths:
-            - "apps/flag-service/**"
-            - ".github/workflows/ci-flag.yml"
-    workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/flag-service/**"
+      - ".github/workflows/ci-flag.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/flag-service/**"
+      - ".github/workflows/ci-flag.yml"
+  workflow_dispatch:
 
 permissions:
-    contents: read
+  contents: read
 
 env:
-    PYTHON_VERSION: "3.11"
-    AWS_REGION: ${{ vars.AWS_REGION }}
-    ECR_REPOSITORY: togglemaster/flag
-    IMAGE_NAME: flag-service
-    GITOPS_REPOSITORY: ${{ vars.GITOPS_REPOSITORY }}
-    GITOPS_BRANCH: ${{ vars.GITOPS_BRANCH }}
-    GITOPS_MANIFEST_PATH: ${{ vars.GITOPS_FLAG_MANIFEST_PATH }}
+  PYTHON_VERSION: "3.11"
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: togglemaster/flag
+  IMAGE_NAME: flag-service
+  GITOPS_REPOSITORY: ${{ vars.GITOPS_REPOSITORY }}
+  GITOPS_BRANCH: ${{ vars.GITOPS_BRANCH }}
+  GITOPS_MANIFEST_PATH: ${{ vars.GITOPS_FLAG_MANIFEST_PATH }}
 
 jobs:
-    test:
-        name: Test
-        runs-on: ubuntu-latest
-        defaults:
-            run:
-                working-directory: apps/flag-service
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v5
-            - name: Set up Python
-              uses: actions/setup-python@v6
-              with:
-                  python-version: ${{ env.PYTHON_VERSION }}
-                  cache: pip
-                  cache-dependency-path: apps/flag-service/requirements.txt
-            - name: Install dependencies
-              run: python -m pip install --upgrade pip && pip install -r requirements.txt
-            - name: Compile Python sources
-              run: python -m compileall -q .
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/flag-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: apps/flag-service/requirements.txt
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Compile Python sources
+        run: python -m compileall -q .
 
-    lint:
-        name: Lint
-        runs-on: ubuntu-latest
-        needs: test
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v5
-            - name: Set up Python
-              uses: actions/setup-python@v6
-              with:
-                  python-version: ${{ env.PYTHON_VERSION }}
-            - name: Install Ruff
-              run: python -m pip install ruff
-            - name: Run Ruff
-              run: ruff check apps/flag-service
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install Ruff
+        run: python -m pip install ruff
+      - name: Run Ruff
+        run: ruff check apps/flag-service
 
-    security:
-        name: Security
-        runs-on: ubuntu-latest
-        needs: test
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v5
-            - name: Run Trivy filesystem scan
-              uses: aquasecurity/trivy-action@v0.36.0
-              with:
-                  scan-type: fs
-                  scan-ref: apps/flag-service
-                  ignore-unfixed: true
-                  severity: CRITICAL
-                  exit-code: "1"
-                  format: table
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: apps/flag-service
+          ignore-unfixed: true
+          severity: CRITICAL
+          exit-code: "1"
+          format: table
 
-    build:
-        name: Build
-        runs-on: ubuntu-latest
-        needs: [lint, security]
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v5
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v4
-            - name: Build image
-              run: docker build --tag "${{ env.IMAGE_NAME }}:${{ github.sha }}" apps/flag-service
-            - name: Scan image with Trivy
-              uses: aquasecurity/trivy-action@v0.36.0
-              with:
-                  image-ref: "${{ env.IMAGE_NAME }}:${{ github.sha }}"
-                  ignore-unfixed: true
-                  severity: CRITICAL
-                  exit-code: "1"
-                  format: table
-            - name: Configure AWS credentials
-              uses: aws-actions/configure-aws-credentials@v6
-              if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-              with:
-                  aws-region: ${{ env.AWS_REGION }}
-                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-            - name: Log in to Amazon ECR
-              id: ecr-login
-              uses: aws-actions/amazon-ecr-login@v2
-              if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-            - name: Tag and push image
-              if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-              env:
-                  ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-              run: |
-                  docker tag "${{ env.IMAGE_NAME }}:${{ github.sha }}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, security]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Build image
+        run: docker build --tag "${{ env.IMAGE_NAME }}:${{ github.sha }}" apps/flag-service
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          ignore-unfixed: true
+          severity: CRITICAL
+          exit-code: "1"
+          format: table
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+      - name: Tag and push image
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker tag "${{ env.IMAGE_NAME }}:${{ github.sha }}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
 
-            - name: Check whether image tag already exists
-              id: image-tag
-              if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-              run: |
-                  if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids "imageTag=$GITHUB_SHA" --region "$AWS_REGION" >/dev/null 2>&1; then
-                    echo "exists=true" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "exists=false" >> "$GITHUB_OUTPUT"
-                  fi
+      - name: Check whether image tag already exists
+        id: image-tag
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        run: |
+          if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids "imageTag=$GITHUB_SHA" --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
-            - name: Push image to Amazon ECR
-              if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && steps.image-tag.outputs.exists != 'true'
-              env:
-                  ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-              run: docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
+      - name: Push image to Amazon ECR
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && steps.image-tag.outputs.exists != 'true'
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
 
-            - name: Checkout GitOps repository
-              if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-              uses: actions/checkout@v5
-              with:
-                  repository: ${{ env.GITOPS_REPOSITORY }}
-                  ref: ${{ env.GITOPS_BRANCH }}
-                  token: ${{ secrets.GITOPS_TOKEN }}
-                  path: gitops
+      - name: Checkout GitOps repository
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.GITOPS_REPOSITORY }}
+          ref: ${{ env.GITOPS_BRANCH }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
 
-            - name: Update GitOps manifest
-              if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-              working-directory: gitops
-              env:
-                  IMAGE: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-                  MANIFEST_PATH: ${{ env.GITOPS_MANIFEST_PATH }}
-              run: |
-                  python3 - "$MANIFEST_PATH" "$IMAGE" <<'PY'
-                  from pathlib import Path
-                  import re
-                  import sys
-                  manifest_path, image = sys.argv[1:]
-                  path = Path(manifest_path)
-                  content = path.read_text()
-                  updated, replacements = re.subn(r"(?m)^(\s*image:\s*).+$", rf"\g<1>{image}", content, count=1)
-                  if replacements != 1:
-                    raise SystemExit(f"Campo image não encontrado: {manifest_path}")
-                  path.write_text(updated)
-                  PY
-                  git config user.name "github-actions[bot]"
-                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-                  git add "$MANIFEST_PATH"
-                  if git diff --cached --quiet; then exit 0; fi
-                  git commit -m "chore: update ${MANIFEST_PATH} image"
-                  git push
+      - name: Update GitOps manifest
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        working-directory: gitops
+        env:
+          IMAGE: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          MANIFEST_PATH: ${{ env.GITOPS_MANIFEST_PATH }}
+        run: |
+          python3 - "$MANIFEST_PATH" "$IMAGE" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+          manifest_path, image = sys.argv[1:]
+          path = Path(manifest_path)
+          content = path.read_text()
+          updated, replacements = re.subn(r"(?m)^(\s*image:\s*).+$", rf"\g<1>{image}", content, count=1)
+          if replacements != 1:
+            raise SystemExit(f"Campo image não encontrado: {manifest_path}")
+          path.write_text(updated)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$MANIFEST_PATH"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore: update ${MANIFEST_PATH} image"
+
+          pushed=false
+          for i in {1..5}; do
+            if git push origin "${GITOPS_BRANCH:-main}"; then
+              pushed=true
+              break
+            fi
+            echo "Concorrencia detectada no push, tentando pull --rebase (tentativa $i/5)..."
+            sleep $((i * 2))
+            git pull --rebase origin "${GITOPS_BRANCH:-main}"
+          done
+          if [[ "$pushed" != "true" ]]; then
+            echo "Falha ao enviar alteracoes para o GitOps apos 5 tentativas." >&2
+            exit 1
+          fi
