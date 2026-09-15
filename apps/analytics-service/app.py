@@ -11,7 +11,7 @@ from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 
-# Validando GitOps
+# Validando GitOps deployment
 # Configura o logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
